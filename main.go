@@ -12,8 +12,13 @@ const (
 	bcdPlusSP    = 10 // BCD Plus space code
 )
 
+// BCDPlusBytes stores the BCD+ encoded BCDPlusBytes.
+// Code mapping: '0'-'9' <-> 0x0-0x9, SP <-> 0xa, '-' <-> 0xb, '.' <-> 0xc.
 type BCDPlusBytes []byte
 
+// Decode decodes the BCD+ encoded bytes and returns the decoded []byte.
+// trim indicates if the trailing spaces should be trimmed.
+// An error is returned if it contains any invalid BCD+ char.
 func (b BCDPlusBytes) Decode(trim bool) ([]byte, error) {
 	lSrc, nCodes := len(b), len(bcdPlusCodes)
 	dest := make([]byte, lSrc*2)
@@ -36,6 +41,9 @@ func (b BCDPlusBytes) Decode(trim bool) ([]byte, error) {
 	return dest, nil
 }
 
+// Encode encodes the src []byte to BCD+ encoded form.
+// The bool returned indicates if the padded space is added (src length is not even).
+// An error is returned if src contains invalid BCD+ char.
 func (b *BCDPlusBytes) Encode(src []byte) (bool, error) {
 	lSrc := len(src)
 	lDest := (lSrc + 1) / 2
@@ -133,6 +141,23 @@ func (p *Packed6BitAsciiBytes) Encode(src []byte) error {
 	return nil
 }
 
+func CalculateZeroChecksum(data []byte, start, nBytes int) (byte, error) {
+  lData := len(data)
+  if start < 0 || start >= lData {
+    return 0, fmt.Errorf("invalid start value (%d): expected in [0...%d]",
+      start, lData-1)
+  } else if nBytes < 0 || nBytes > lData-start {
+    return 0, fmt.Errorf("invalid nBytes value (%d): expected in [0...%d]",
+      nBytes, lData-start)
+  }
+  sum := byte(0)
+  for i := start; i < start+nBytes; i++ {
+    sum += data[i] // this will always truncate it to byte
+  }
+  sum = ^sum + 1 // make it a 2's compliment (zero checksum)
+  return sum, nil
+}
+
 func main() {
 	s := "123-456-7.890"
 	var x BCDPlusBytes
@@ -147,4 +172,8 @@ func main() {
 	fmt.Println(hex.Dump(p))
 	sb, err = p.Decode(true)
 	fmt.Printf("%q err=%v\n", sb, err)
+
+  data := []byte{0xff, 0xff, 0x3, 0xff, 0x3, 0x3, 0x4, 0x5, 0xff, 0x7, 0x7, 0x8, 0x9, 0xff, 0xb}
+  fmt.Println(CalculateZeroChecksum(data, 0, len(data)))
+  fmt.Println(256-55)
 }
